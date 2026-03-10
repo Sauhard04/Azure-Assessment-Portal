@@ -15,6 +15,7 @@ function Get-HtmlTemplate {
 <head>
 <meta charset='UTF-8'>
 <title>Azure Assessment - $Title</title>
+<link rel="icon" type="image/png" href="Screenshot_2026-03-10_201227-removebg-preview.png">
 <style>
   *{box-sizing:border-box;margin:0;padding:0}
   body{font-family:'Segoe UI',Arial,sans-serif;background:#0a0e1a;color:#e8eaf0;min-height:100vh;padding:30px}
