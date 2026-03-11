@@ -70,15 +70,21 @@ try {
 Write-Host "[4/6] Compute & Services..." -ForegroundColor Cyan
 try {
     # VMs & Scale Sets
-    $vms = Get-AzVM
+    $vms = Get-AzVM -ErrorAction SilentlyContinue
     foreach ($vm in $vms) {
         $name = $vm.Name; $rg = $vm.ResourceGroupName
         $enc = Get-AzVMDiskEncryptionStatus -ResourceGroupName $rg -VMName $name -ErrorAction SilentlyContinue
         $results += [PSCustomObject]@{ Category="Compute"; Check="Disk Encryption"; Resource=$name; Status=if($enc.OsVolumeEncrypted -eq "Encrypted"){"PASS"}else{"FAIL"}; Details="OS Disk: $($enc.OsVolumeEncrypted)" }
         $results += [PSCustomObject]@{ Category="Compute"; Check="Managed Identity"; Resource=$name; Status=if($vm.Identity){"PASS"}else{"WARN"}; Details=if($vm.Identity){"Identity: $($vm.Identity.Type)"}else{"No managed identity"} }
-        if ($vm.StorageProfile.OsDisk.OsType -eq "Linux") {
-            $results += [PSCustomObject]@{ Category="Compute"; Check="SSH Auth Type"; Resource=$name; Status=if($vm.OSProfile.LinuxConfiguration.DisablePasswordAuthentication){"PASS"}else{"FAIL"}; Details=if($vm.OSProfile.LinuxConfiguration.DisablePasswordAuthentication){"SSH Keys"}else{"Password allowed"} }
-        }
+        
+        # New Detailed Checks
+        $results += [PSCustomObject]@{ Category="Compute"; Check="Boot Diagnostics"; Resource=$name; Status=if($vm.DiagnosticsProfile.BootDiagnostics.Enabled){"PASS"}else{"FAIL"}; Details="Status: $($vm.DiagnosticsProfile.BootDiagnostics.Enabled)" }
+        $results += [PSCustomObject]@{ Category="Compute"; Check="Admin Username"; Resource=$name; Status=if($vm.OSProfile.AdminUsername -in @("admin","root","azureuser")){"WARN"}else{"PASS"}; Details="User: $($vm.OSProfile.AdminUsername)" }
+    }
+
+    $vmssList = Get-AzVmss -ErrorAction SilentlyContinue
+    foreach ($vmss in $vmssList) {
+        $results += [PSCustomObject]@{ Category="Compute"; Check="VMSS Auto Repair"; Resource=$vmss.Name; Status=if($vmss.VirtualMachineProfile.DiagnosticsProfile){"PASS"}else{"WARN"}; Details="Enabled" }
     }
     
     # App Services

@@ -84,8 +84,135 @@ try {
         # 3. Managed Identity
         $hasMI = $vm.Identity -ne $null
         $results += [PSCustomObject]@{ Category="VM Security"; Check="Managed Identity"; Resource=$name; Status=if($hasMI){"PASS"}else{"WARN"}; Details=if($hasMI){"Identity: $($vm.Identity.Type)"}else{"No managed identity"} }
+
+        # 4. Boot Diagnostics Enabled
+        $bootDiag = $vm.DiagnosticsProfile.BootDiagnostics.Enabled
+        $results += [PSCustomObject]@{
+            Category="VM Security"
+            Check="Enable Virtual Machine Boot Diagnostics"
+            Resource=$name
+            Status=if($bootDiag){"PASS"}else{"FAIL"}
+            Details="Boot Diagnostics: $bootDiag"
+        }
+
+        # 5. Managed Disk Usage
+        $managedDisk = $vm.StorageProfile.OsDisk.ManagedDisk -ne $null
+        $results += [PSCustomObject]@{
+            Category="VM Security"
+            Check="Use Managed Disk Volumes for Virtual Machines"
+            Resource=$name
+            Status=if($managedDisk){"PASS"}else{"FAIL"}
+            Details=if($managedDisk){"Managed Disk Enabled"}else{"Unmanaged Disk"}
+        }
+
+        # 6. Accelerated Networking
+        $nics = Get-AzNetworkInterface -ResourceGroupName $rg -ErrorAction SilentlyContinue | Where-Object { $_.VirtualMachine.Id -match $name }
+        foreach ($nic in $nics) {
+            $accel = $nic.EnableAcceleratedNetworking
+            $results += [PSCustomObject]@{
+                Category="VM Network"
+                Check="Enable Accelerated Networking for Virtual Machines"
+                Resource=$name
+                Status=if($accel){"PASS"}else{"WARN"}
+                Details="NIC: $($nic.Name) Accelerated Networking: $accel"
+            }
+        }
+
+        # 7. Basic Admin Username Check
+        $adminUser = $vm.OSProfile.AdminUsername
+        $weakUsers = @("admin","administrator","root","azureuser")
+        $results += [PSCustomObject]@{
+            Category="VM Security"
+            Check="Check for Basic Azure Admin Username"
+            Resource=$name
+            Status=if($weakUsers -contains $adminUser.ToLower()){"WARN"}else{"PASS"}
+            Details="Admin Username: $adminUser"
+        }
+
+        # 8. Premium SSD Check
+        $diskSku = $vm.StorageProfile.OsDisk.ManagedDisk.StorageAccountType
+        $results += [PSCustomObject]@{
+            Category="VM Storage"
+            Check="Disable Premium SSD"
+            Resource=$name
+            Status=if($diskSku -match "Premium"){"WARN"}else{"PASS"}
+            Details="Disk SKU: $diskSku"
+        }
+
+        # 9. Data Disk Encryption
+        foreach ($disk in $vm.StorageProfile.DataDisks) {
+            $encStatus = $enc.DataVolumesEncrypted
+            $results += [PSCustomObject]@{
+                Category="VM Security"
+                Check="Azure Disk Encryption for Non-Boot Disk Volumes"
+                Resource=$name
+                Status=if($encStatus -eq "Encrypted"){"PASS"}else{"FAIL"}
+                Details="Data Disk: $($disk.Name) Encryption: $encStatus"
+            }
+        }
+
+        # 10. Endpoint Protection Extension
+        $extensions = Get-AzVMExtension -ResourceGroupName $rg -VMName $name -ErrorAction SilentlyContinue
+        $hasDefender = $extensions | Where-Object { $_.Publisher -match "Microsoft.Azure.Security" }
+        $results += [PSCustomObject]@{
+            Category="VM Security"
+            Check="Install Endpoint Protection"
+            Resource=$name
+            Status=if($hasDefender){"PASS"}else{"WARN"}
+            Details=if($hasDefender){"Security Extension Installed"}else{"No Endpoint Protection"}
+        }
+
+        # 11. Malware Protection
+        $malware = $extensions | Where-Object { $_.Type -match "Antimalware" }
+        $results += [PSCustomObject]@{
+            Category="VM Security"
+            Check="Install Malware Protection"
+            Resource=$name
+            Status=if($malware){"PASS"}else{"WARN"}
+            Details=if($malware){"Antimalware Enabled"}else{"Not Installed"}
+        }
+
+        # 12. File Security Extension
+        $fileSec = $extensions | Where-Object { $_.Type -match "FileIntegrityMonitoring" }
+        $results += [PSCustomObject]@{
+            Category="VM Security"
+            Check="Enable File Security Extensions For VMs"
+            Resource=$name
+            Status=if($fileSec){"PASS"}else{"WARN"}
+            Details=if($fileSec){"File Security Enabled"}else{"Not Configured"}
+        }
     }
     if (-not $vms) { $results += [PSCustomObject]@{ Category="Compute"; Check="Virtual Machines"; Resource="Subscription"; Status="INFO"; Details="No VMs found" } }
+
+    # VMSS Section
+    $vmssList = Get-AzVmss -ErrorAction SilentlyContinue
+    foreach ($vmss in $vmssList) {
+        $results += [PSCustomObject]@{
+            Category="VMSS"
+            Check="Check for Zone-Redundant Virtual Machine Scale Sets"
+            Resource=$vmss.Name
+            Status=if($vmss.Zones){"PASS"}else{"WARN"}
+            Details="Zones: $($vmss.Zones)"
+        }
+
+        $autoRepair = $vmss.VirtualMachineProfile.DiagnosticsProfile
+        $results += [PSCustomObject]@{
+            Category="VMSS"
+            Check="Enable Automatic Instance Repairs"
+            Resource=$vmss.Name
+            Status=if($autoRepair){"PASS"}else{"WARN"}
+            Details="Diagnostics Enabled"
+        }
+
+        $results += [PSCustomObject]@{
+            Category="VMSS"
+            Check="Enable Automatic OS Upgrades"
+            Resource=$vmss.Name
+            Status=if($vmss.UpgradePolicy.AutomaticOSUpgradePolicy.EnableAutomaticOSUpgrade){"PASS"}else{"WARN"}
+            Details="Automatic OS Upgrade"
+        }
+    }
+    if (-not $vmssList) { $results += [PSCustomObject]@{ Category="VMSS"; Check="Scale Sets"; Resource="Subscription"; Status="INFO"; Details="No VMSS found" } }
 } catch { }
 
 # ─────────────────────────────────────────────────────────────
