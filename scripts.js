@@ -74,7 +74,6 @@ function selectCard(el) {
 
     document.getElementById('scriptTitle').textContent = cl.title;
     document.getElementById('scriptDesc').textContent = cl.desc;
-    document.getElementById('reportFileName').textContent = cl.report;
     document.getElementById('commandLine').textContent = command;
     document.getElementById('ps1FileLink').href = rawUrl;
     document.getElementById('ps1FileLink').textContent = cl.file;
