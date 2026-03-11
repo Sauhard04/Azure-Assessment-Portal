@@ -64,9 +64,18 @@ const CHECKLISTS = {
 let selectedKey = null;
 
 function selectCard(el) {
+    selectedKey = el.dataset.checklist;
+
+    // Handle Premium Card Redirect
+    if (selectedKey === 'defender') {
+        const subject = encodeURIComponent("Inquiry regarding Premium Defender & Monitoring Checklist");
+        const body = encodeURIComponent("Hello Vibhu,\n\nI am interested in the Premium Defender & Monitoring assessment checklist. Please provide more details.\n\nThank you.");
+        window.location.href = `mailto:vibhu.dixit@onmeridian.com?subject=${subject}&body=${body}`;
+        return;
+    }
+
     document.querySelectorAll('.card').forEach(c => c.classList.remove('selected', 'pulse-once'));
     el.classList.add('selected', 'pulse-once');
-    selectedKey = el.dataset.checklist;
 
     const cl = CHECKLISTS[selectedKey];
     const rawUrl = `${GITHUB_RAW_BASE}/${cl.file}`;
